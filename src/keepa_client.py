@@ -13,11 +13,14 @@ def _chiamata_keepa(endpoint, parametri):
     url = f"https://api.keepa.com/{endpoint}"
     parametri["key"] = config.KEEPA_API_KEY
     try:
+        print(f"   📡 Chiamata Keepa: {endpoint} per {parametri.get('asin', '')}")
         risposta = requests.get(url, params=parametri, timeout=30)
         risposta.raise_for_status()
         return risposta.json()
     except Exception as e:
-        print(f"[errore API] {e}")
+        print(f"   ❌ Errore API Keepa: {e}")
+        if hasattr(e, 'response') and e.response:
+            print(f"      Risposta: {e.response.text[:200]}")
         return None
 
 
@@ -43,7 +46,10 @@ def costruisci_url_immagine(codice_immagine):
 
 
 def verifica_con_keepa(asin):
+    print(f"   🔍 Inizio verifica per {asin}...")
+    
     if re.match(r'^\d{10,13}$', str(asin)):
+        print(f"   ⚠️ Saltato (sembra un ISBN)")
         return None
     
     parametri = {
@@ -54,17 +60,32 @@ def verifica_con_keepa(asin):
     }
     
     dati = _chiamata_keepa("product", parametri)
-    if not dati or "products" not in dati:
+    if not dati:
+        print(f"   ❌ Nessuna risposta da Keepa per {asin}")
         return None
     
-    prodotto = dati["products"][0] if dati["products"] else None
+    if "products" not in dati:
+        print(f"   ⚠️ Risposta senza 'products': {dati}")
+        return None
+    
+    if not dati["products"]:
+        print(f"   ⚠️ Lista prodotti vuota per {asin}")
+        return None
+    
+    prodotto = dati["products"][0]
     if not prodotto:
+        print(f"   ⚠️ Prodotto vuoto per {asin}")
         return None
     
+    print(f"   ✅ Prodotto trovato: {prodotto.get('title', 'Senza titolo')[:50]}...")
+    
+    # Prezzo attuale
     prezzi = prodotto.get("prices", [])
     if not prezzi or prezzi[-1] <= 0:
+        print(f"   ❌ Prezzo non disponibile")
         return None
     prezzo_attuale = prezzi[-1] / 100
+    print(f"   💰 Prezzo attuale: {prezzo_attuale}€")
     
     titolo = prodotto.get("title", "Prodotto")
     
@@ -73,6 +94,7 @@ def verifica_con_keepa(asin):
     if immagini:
         immagine = costruisci_url_immagine(immagini[0])
     
+    # Minimo storico
     minimo_storico = None
     stats = prodotto.get("stats_parsed", {})
     if stats:
@@ -80,12 +102,15 @@ def verifica_con_keepa(asin):
             min_val = stats["min"].get("AMAZON")
             if min_val and min_val > 0:
                 minimo_storico = min_val / 100
+                print(f"   📉 Minimo storico (da stats): {minimo_storico}€")
         if minimo_storico is None:
             avg30 = stats.get("avg30", {}).get("AMAZON")
             if avg30 and avg30 > 0:
                 minimo_storico = avg30 / 100
+                print(f"   📊 Media 30gg (come riferimento): {minimo_storico}€")
     
     if minimo_storico is None or minimo_storico <= 0:
+        print(f"   🔍 Cerco nello storico...")
         storico = prodotto.get("history", [])
         if storico:
             prezzi_storici = []
@@ -96,21 +121,28 @@ def verifica_con_keepa(asin):
                         prezzi_storici.append(p / 100)
             if prezzi_storici:
                 minimo_storico = min(prezzi_storici)
+                print(f"   📉 Minimo storico (da history): {minimo_storico}€")
     
     if minimo_storico is None or minimo_storico <= 0:
         minimo_storico = prezzo_attuale * 0.85
+        print(f"   ⚠️ Usato fallback: {minimo_storico}€")
     
+    # Calcola sconto
     if prezzo_attuale >= minimo_storico:
         sconto = 0
     else:
         sconto = round((1 - prezzo_attuale / minimo_storico) * 100)
-
-    print(f"   DEBUG: attuale={prezzo_attuale}, minimo={minimo_storico}, sconto={sconto}%")
+    
+    print(f"   📊 Sconto calcolato: {sconto}% (soglia: {config.SCONTO_MINIMO_PERCENTUALE}%)")
     
     if sconto < config.SCONTO_MINIMO_PERCENTUALE:
+        print(f"   ❌ Sconto {sconto}% < soglia {config.SCONTO_MINIMO_PERCENTUALE}%")
         return None
     if sconto > config.SCONTO_MASSIMO_PLAUSIBILE:
+        print(f"   ❌ Sconto {sconto}% > max {config.SCONTO_MASSIMO_PLAUSIBILE}%")
         return None
+    
+    print(f"   ✅ OFFERTA VALIDA!")
     
     return {
         "asin": asin,
@@ -132,7 +164,7 @@ def trova_tutte_le_offerte():
 
     test = _chiamata_keepa("product", {"asin": "B08N5WRWNW", "domain": 8})
     if not test or "products" not in test:
-        print("❌ Errore nella connessione a Keepa.")
+        print("❌ Errore nella connessione a Keepa. Verifica la tua API key.")
         return []
     
     print("✅ Connessione a Keepa OK")
@@ -144,27 +176,28 @@ def trova_tutte_le_offerte():
         print(f"   📋 Aggiungo {len(config.ASIN_MANUALI)} ASIN manuali...")
         asins_da_verificare.extend(config.ASIN_MANUALI)
     
-    # Scraping
-    termini = config.CATEGORIE["studente"]["termini_ricerca"]
-    for termine in termini[:config.MAX_TERMINI_RICERCA]:
-        url = f"https://www.amazon.it/s?k={termine}&rh=p_n_deal_type%3A2356605031&language=it"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
-        }
-        try:
-            print(f"   Cerco: {termine}...")
-            risposta = requests.get(url, headers=headers, timeout=15)
-            risposta.raise_for_status()
-            soup = BeautifulSoup(risposta.text, 'html.parser')
-            risultati = soup.select('[data-component-type="s-search-result"]')
-            for elem in risultati[:8]:
-                asin = elem.get('data-asin')
-                if asin and asin != "" and not re.match(r'^\d{10,13}$', asin):
-                    asins_da_verificare.append(asin)
-            time.sleep(1.5)
-        except Exception as e:
-            print(f"   ❌ Errore per {termine}: {e}")
+    # Scraping (solo se non abbiamo ASIN manuali)
+    if not asins_da_verificare:
+        termini = config.CATEGORIE["studente"]["termini_ricerca"]
+        for termine in termini[:config.MAX_TERMINI_RICERCA]:
+            url = f"https://www.amazon.it/s?k={termine}&rh=p_n_deal_type%3A2356605031&language=it"
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+            }
+            try:
+                print(f"   Cerco: {termine}...")
+                risposta = requests.get(url, headers=headers, timeout=15)
+                risposta.raise_for_status()
+                soup = BeautifulSoup(risposta.text, 'html.parser')
+                risultati = soup.select('[data-component-type="s-search-result"]')
+                for elem in risultati[:8]:
+                    asin = elem.get('data-asin')
+                    if asin and asin != "" and not re.match(r'^\d{10,13}$', asin):
+                        asins_da_verificare.append(asin)
+                time.sleep(1.5)
+            except Exception as e:
+                print(f"   ❌ Errore per {termine}: {e}")
     
     asins_da_verificare = list(set(asins_da_verificare))
     print(f"   📊 Trovati {len(asins_da_verificare)} ASIN unici")
