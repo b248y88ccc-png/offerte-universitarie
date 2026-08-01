@@ -104,6 +104,8 @@ def verifica_con_keepa(asin):
         sconto = 0
     else:
         sconto = round((1 - prezzo_attuale / minimo_storico) * 100)
+
+    print(f"   DEBUG: attuale={prezzo_attuale}, minimo={minimo_storico}, sconto={sconto}%")
     
     if sconto < config.SCONTO_MINIMO_PERCENTUALE:
         return None
