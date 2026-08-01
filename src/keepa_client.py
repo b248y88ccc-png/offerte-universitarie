@@ -73,8 +73,9 @@ def verifica_con_keepa(asin):
         return None
     
     prodotto = dati["products"][0]
-    if not prodotto:
-        print(f"   ⚠️ Prodotto vuoto per {asin}")
+    
+    if prodotto is None:
+        print(f"   ⚠️ Prodotto None per {asin}. Salto.")
         return None
     
     print(f"   ✅ Prodotto trovato: {prodotto.get('title', 'Senza titolo')[:50]}...")
@@ -162,7 +163,7 @@ def trova_tutte_le_offerte():
         print("❌ KEEPA_API_KEY non impostata!")
         return []
 
-    test = _chiamata_keepa("product", {"asin": "B08N5WRWNW", "domain": 8})
+    test = _chiamata_keepa("product", {"asin": "B07X3T1F9J", "domain": 8})
     if not test or "products" not in test:
         print("❌ Errore nella connessione a Keepa. Verifica la tua API key.")
         return []
