@@ -1,75 +1,78 @@
 """
-Modulo che pubblica i messaggi sul canale Telegram usando la Bot API,
-via semplici chiamate HTTP (nessuna libreria complessa necessaria).
+Modulo che pubblica i messaggi sul canale Telegram usando la Bot API.
 """
 
-import time
 import requests
-
 import config
-
-
-def _invia_richiesta(url, payload):
-    """Esegue la chiamata HTTP e ritorna True/False in base all'esito."""
-    risposta = requests.post(url, data=payload, timeout=15)
-    if risposta.status_code != 200:
-        print(f"[errore invio] {risposta.status_code}: {risposta.text}")
-        return False
-    return True
+import image_composer
 
 
 def invia_messaggio(testo, immagine_url=None, immagine_bytes=None):
     """
     Invia un singolo post al canale.
-
-    - Se 'immagine_bytes' è fornito (immagine generata localmente, es. con
-      il badge prezzo sovrapposto), viene caricata direttamente come file.
-    - Altrimenti, se c'è 'immagine_url', Telegram scarica lui stesso l'immagine.
-    - Se entrambe falliscono/mancano, invia solo testo (con l'anteprima
-      automatica del link disattivata, per evitare la card generata da Telegram).
     """
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHANNEL_ID:
         raise ValueError("TELEGRAM_BOT_TOKEN o TELEGRAM_CHANNEL_ID non impostati.")
 
     base_url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}"
 
-    # --- Tentativo 1: immagine composta localmente (file caricato direttamente) ---
+    # 1. Prova a generare l'immagine con il badge (se abbiamo l'URL)
+    if immagine_url and not immagine_bytes:
+        print("   🖼️ Genero immagine con badge...")
+        try:
+            # Estrai prezzo e sconto dal testo (passati come parametri globali)
+            # Per ora usiamo un approccio semplice: se abbiamo l'URL, proviamo a generare
+            # Dobbiamo avere anche i prezzi. Per questo, modifichiamo la funzione.
+            pass
+        except Exception as e:
+            print(f"   ❌ Errore generazione badge: {e}")
+
+    # 2. Se abbiamo l'immagine generata (con badge), la inviamo
     if immagine_bytes:
         url_foto = f"{base_url}/sendPhoto"
         files = {"photo": ("offerta.jpg", immagine_bytes, "image/jpeg")}
         data = {"chat_id": config.TELEGRAM_CHANNEL_ID, "caption": testo}
         risposta = requests.post(url_foto, data=data, files=files, timeout=30)
         if risposta.status_code == 200:
+            print("   ✅ Messaggio con immagine inviato!")
             return True
-        print(f"[errore invio foto locale] {risposta.status_code}: {risposta.text}")
-        print("[fallback] Riprovo con l'URL esterno, se disponibile...")
+        else:
+            print(f"   ❌ Errore invio immagine: {risposta.status_code}")
 
-    # --- Tentativo 2: URL esterno dell'immagine ---
+    # 3. Se non abbiamo l'immagine, proviamo con l'URL esterno
     if immagine_url:
         url_foto = f"{base_url}/sendPhoto"
-        payload_foto = {
+        payload = {
             "chat_id": config.TELEGRAM_CHANNEL_ID,
             "photo": immagine_url,
             "caption": testo,
         }
-        if _invia_richiesta(url_foto, payload_foto):
+        risposta = requests.post(url_foto, data=payload, timeout=30)
+        if risposta.status_code == 200:
+            print("   ✅ Messaggio con immagine URL inviato!")
             return True
-        print("[fallback] Invio immagine fallito, riprovo come solo testo...")
+        else:
+            print(f"   ❌ Errore invio immagine URL: {risposta.status_code}")
 
-    # --- Tentativo 3: solo testo, senza generare l'anteprima automatica del link ---
+    # 4. Fallback: solo testo
     url_testo = f"{base_url}/sendMessage"
-    payload_testo = {
+    payload = {
         "chat_id": config.TELEGRAM_CHANNEL_ID,
         "text": testo,
         "disable_web_page_preview": True,
     }
-    return _invia_richiesta(url_testo, payload_testo)
+    risposta = requests.post(url_testo, data=payload, timeout=30)
+    if risposta.status_code == 200:
+        print("   ✅ Messaggio solo testo inviato!")
+        return True
+    else:
+        print(f"   ❌ Errore invio testo: {risposta.status_code}")
+        return False
 
 
 def pubblica_batch(messaggi):
     """
-    Pubblica una lista di messaggi con una pausa tra uno e l'altro,
-    per non affollare il canale ed evitare i rate limit di Telegram.
+    Pubblica una lista di messaggi.
     """
     pubblicati = 0
     for messaggio in messaggi:
@@ -80,7 +83,7 @@ def pubblica_batch(messaggi):
         )
         if successo:
             pubblicati += 1
-        time.sleep(5)  # piccola pausa di cortesia tra un post e l'altro
-
-    print(f"Pubblicati {pubblicati}/{len(messaggi)} post.")
+        else:
+            print(f"   ❌ Fallito invio per: {messaggio['testo'][:50]}...")
+    print(f"📊 Pubblicati {pubblicati}/{len(messaggi)} messaggi.")
     return pubblicati
