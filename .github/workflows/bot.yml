@@ -24,7 +24,7 @@ jobs:
       
       - name: Esegui il bot
         run: |
-          ls -la
+          cd src
           python3 main.py
         env:
           KEEPA_API_KEY: ${{ secrets.KEEPA_API_KEY }}
