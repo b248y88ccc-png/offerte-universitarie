@@ -79,7 +79,7 @@ MAX_TERMINI_RICERCA = 8
 # ============================================
 
 ASIN_MANUALI = [
-    "B0B4VXBMX6",  # Tastiera Dierya
+   "B08N5WRWNW",  # Tastiera Dierya
 ]
 
 # ============================================
