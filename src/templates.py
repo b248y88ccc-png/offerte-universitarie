@@ -51,18 +51,16 @@ def costruisci_messaggio(offerta):
 def costruisci_messaggi_batch(lista_offerte):
     """
     Costruisce una lista di messaggi per tutte le offerte.
-    Genera anche l'immagine con badge se possibile.
     """
     messaggi = []
     for offerta in lista_offerte:
         testo = costruisci_messaggio(offerta)
         
-        # Prova a generare l'immagine con badge
+        # Genera immagine con badge
         immagine_bytes = None
         immagine_url = offerta.get("immagine")
         
         if immagine_url:
-            print(f"   🖼️ Genero badge per: {offerta['titolo'][:30]}...")
             try:
                 immagine_bytes = image_composer.componi_immagine_offerta(
                     immagine_url,
@@ -70,12 +68,8 @@ def costruisci_messaggi_batch(lista_offerte):
                     offerta["prezzo_precedente_eur"],
                     offerta["sconto_percentuale"],
                 )
-                if immagine_bytes:
-                    print(f"      ✅ Badge generato!")
-                else:
-                    print(f"      ⚠️ Badge non generato, uso immagine originale")
             except Exception as e:
-                print(f"      ❌ Errore badge: {e}")
+                print(f"   ❌ Errore badge: {e}")
         
         messaggi.append({
             "testo": testo,
