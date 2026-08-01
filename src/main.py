@@ -5,14 +5,10 @@ Script principale: trova le offerte su Amazon, le verifica con Keepa, le pubblic
 import keepa_client
 import templates
 import telegram_publisher
-import config
 
 
 def main():
-    # Valida la configurazione
-    if not config.valida_config():
-        print("❌ Configurazione non valida. Correggi gli errori e riprova.")
-        return
+    print("🚀 Avvio bot offerte universitarie...")
     
     # Trova le offerte
     offerte = keepa_client.trova_tutte_le_offerte()
