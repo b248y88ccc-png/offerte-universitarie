@@ -1,53 +1,40 @@
 """
 Costruisce il testo del post Telegram a partire da un'offerta.
-Supporta template standard e template per offerte top.
 """
 
 import config
+import image_composer
 
 
 def costruisci_frase_utilita(categoria_key, titolo):
-    """
-    Sceglie una frase utile in base alla categoria e al titolo.
-    """
-    # Prova a trovare una frase specifica per la categoria
     if categoria_key in config.FRASI_UTILITA:
         return config.FRASI_UTILITA[categoria_key]
     
-    # Altrimenti, genera una frase in base al titolo
     titolo_lower = titolo.lower()
-    if any(word in titolo_lower for word in ["libro", "manuale", "testo", "edizione"]):
+    if any(word in titolo_lower for word in ["libro", "manuale", "testo"]):
         return "📖 Perfetto per lo studio e gli esami!"
-    elif any(word in titolo_lower for word in ["computer", "portatile", "tablet", "monitor"]):
+    elif any(word in titolo_lower for word in ["computer", "portatile", "tablet"]):
         return "💻 L'alleato ideale per le tue lezioni!"
-    elif any(word in titolo_lower for word in ["zaino", "borraccia", "lampada"]):
-        return "🎒 Comodo e pratico per la vita universitaria!"
     else:
         return "🎓 Utile per la tua esperienza universitaria!"
 
 
 def costruisci_messaggio(offerta):
-    """
-    Costruisce il messaggio Telegram per un'offerta.
-    Sceglie il template in base allo sconto.
-    """
     titolo = offerta["titolo"]
     prezzo_attuale = offerta["prezzo_attuale_eur"]
     prezzo_precedente = offerta["prezzo_precedente_eur"]
     sconto = offerta["sconto_percentuale"]
     link = offerta["link"]
-    emoji = offerta["categoria_info"]["emoji"]
-    categoria_key = offerta["categoria_key"]
+    emoji = offerta.get("categoria_info", {}).get("emoji", "🎓")
+    categoria_key = offerta.get("categoria_key", "studente")
     
     frase_utilita = costruisci_frase_utilita(categoria_key, titolo)
     
-    # Scegli il template in base allo sconto
     if sconto >= config.SCONTO_TOP_PERCENTUALE:
         template = config.TEMPLATE_TOP
     else:
         template = config.TEMPLATE_MESSAGGIO
     
-    # Formatta il messaggio
     messaggio = template.format(
         emoji=emoji,
         titolo=titolo,
@@ -64,13 +51,36 @@ def costruisci_messaggio(offerta):
 def costruisci_messaggi_batch(lista_offerte):
     """
     Costruisce una lista di messaggi per tutte le offerte.
+    Genera anche l'immagine con badge se possibile.
     """
     messaggi = []
     for offerta in lista_offerte:
         testo = costruisci_messaggio(offerta)
+        
+        # Prova a generare l'immagine con badge
+        immagine_bytes = None
+        immagine_url = offerta.get("immagine")
+        
+        if immagine_url:
+            print(f"   🖼️ Genero badge per: {offerta['titolo'][:30]}...")
+            try:
+                immagine_bytes = image_composer.componi_immagine_offerta(
+                    immagine_url,
+                    offerta["prezzo_attuale_eur"],
+                    offerta["prezzo_precedente_eur"],
+                    offerta["sconto_percentuale"],
+                )
+                if immagine_bytes:
+                    print(f"      ✅ Badge generato!")
+                else:
+                    print(f"      ⚠️ Badge non generato, uso immagine originale")
+            except Exception as e:
+                print(f"      ❌ Errore badge: {e}")
+        
         messaggi.append({
             "testo": testo,
-            "immagine": offerta.get("immagine"),
-            "immagine_bytes": None,  # Per ora non generiamo immagini
+            "immagine": immagine_url,
+            "immagine_bytes": immagine_bytes,
         })
+    
     return messaggi
