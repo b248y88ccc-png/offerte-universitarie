@@ -20,7 +20,7 @@ jobs:
       
       - name: Installa dipendenze
         run: |
-          pip install requests beautifulsoup4 Pillow
+          pip install requests beautifulsoup4 Pillow matplotlib
       
       - name: Esegui il bot
         run: |
