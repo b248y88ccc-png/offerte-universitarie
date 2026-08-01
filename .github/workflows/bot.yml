@@ -1,0 +1,32 @@
+name: Bot Offerte Universitarie
+
+on:
+  schedule:
+    - cron: '0 9,14,20 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Installa dipendenze
+        run: |
+          pip install requests beautifulsoup4
+      
+      - name: Esegui il bot
+        run: |
+          cd src
+          python3 main.py
+        env:
+          KEEPA_API_KEY: ${{ secrets.KEEPA_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
