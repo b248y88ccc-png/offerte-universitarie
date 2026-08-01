@@ -16,30 +16,19 @@ def invia_messaggio(testo, immagine_url=None, immagine_bytes=None):
 
     base_url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}"
 
-    # 1. Prova a generare l'immagine con il badge (se abbiamo l'URL)
-    if immagine_url and not immagine_bytes:
-        print("   🖼️ Genero immagine con badge...")
-        try:
-            # Estrai prezzo e sconto dal testo (passati come parametri globali)
-            # Per ora usiamo un approccio semplice: se abbiamo l'URL, proviamo a generare
-            # Dobbiamo avere anche i prezzi. Per questo, modifichiamo la funzione.
-            pass
-        except Exception as e:
-            print(f"   ❌ Errore generazione badge: {e}")
-
-    # 2. Se abbiamo l'immagine generata (con badge), la inviamo
+    # 1. Prova a inviare l'immagine generata (con badge)
     if immagine_bytes:
         url_foto = f"{base_url}/sendPhoto"
         files = {"photo": ("offerta.jpg", immagine_bytes, "image/jpeg")}
         data = {"chat_id": config.TELEGRAM_CHANNEL_ID, "caption": testo}
         risposta = requests.post(url_foto, data=data, files=files, timeout=30)
         if risposta.status_code == 200:
-            print("   ✅ Messaggio con immagine inviato!")
+            print("   ✅ Messaggio con immagine badge inviato!")
             return True
         else:
-            print(f"   ❌ Errore invio immagine: {risposta.status_code}")
+            print(f"   ❌ Errore invio immagine badge: {risposta.status_code}")
 
-    # 3. Se non abbiamo l'immagine, proviamo con l'URL esterno
+    # 2. Prova con URL esterno
     if immagine_url:
         url_foto = f"{base_url}/sendPhoto"
         payload = {
@@ -54,7 +43,7 @@ def invia_messaggio(testo, immagine_url=None, immagine_bytes=None):
         else:
             print(f"   ❌ Errore invio immagine URL: {risposta.status_code}")
 
-    # 4. Fallback: solo testo
+    # 3. Fallback: solo testo
     url_testo = f"{base_url}/sendMessage"
     payload = {
         "chat_id": config.TELEGRAM_CHANNEL_ID,
