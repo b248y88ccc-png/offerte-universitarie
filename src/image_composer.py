@@ -101,3 +101,14 @@ def componi_immagine_offerta(url_immagine_prodotto, prezzo_attuale, prezzo_prece
     buffer = io.BytesIO()
     canvas_finale.save(buffer, format="JPEG", quality=90)
     return buffer.getvalue()
+# Alla fine del file, dopo la funzione componi_immagine_offerta
+if __name__ == "__main__":
+    # Test con un'immagine di esempio
+    url_test = "https://m.media-amazon.com/images/I/81wr7L6ZC5L._SL1000_.jpg"
+    risultato = componi_immagine_offerta(url_test, 19.99, 29.99, 33)
+    if risultato:
+        with open("test_badge.jpg", "wb") as f:
+            f.write(risultato)
+        print("✅ Immagine generata con successo!")
+    else:
+        print("❌ Errore nella generazione dell'immagine")
