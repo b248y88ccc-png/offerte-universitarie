@@ -135,7 +135,7 @@ MAX_TERMINI_RICERCA = 8
 # ============================================
 
 # Questi ASIN vengono sempre verificati, indipendentemente dalla ricerca
-ASIN_MANUALI = [ B0B4VXBMX6
+ASIN_MANUALI = [ "B0B4VXBMX6"
     # Inserisci qui gli ASIN dei prodotti che ti interessano
     # Esempi:
     # "B08N5WRWNW",
