@@ -59,7 +59,7 @@ CATEGORIE = {
 # 4. SOGLIE PER LE OFFERTE
 # ============================================
 
-SCONTO_MINIMO_PERCENTUALE = 2
+SCONTO_MINIMO_PERCENTUALE = 2  # ABBASATO AL 2%
 PREZZO_MINIMO = 3.0
 PREZZO_MASSIMO = 500.0
 SCONTO_MASSIMO_PLAUSIBILE = 80
@@ -75,11 +75,23 @@ MAX_ASIN_PER_ESECUZIONE = 30
 MAX_TERMINI_RICERCA = 8
 
 # ============================================
-# 6. ASIN MANUALI (sempre verificati)
+# 6. ASIN MANUALI (PRODOTTI DA MONITORARE)
 # ============================================
 
 ASIN_MANUALI = [
-   "B08N5WRWNW",  # Tastiera Dierya
+    "B07V5KK3PD",  # Norton Antivirus
+    "B0B4VXBMX6",  # Tastiera Dierya
+    "B0D8FR9DMR",  # Prodotto in offerta
+    "B0BZMLKXL4",  # Prodotto in offerta
+    "B0DGKDRXYZ",  # Prodotto in offerta
+    "B08J7G9S1F",  # Prodotto in offerta
+    "B0CQK8TZCF",  # Prodotto in offerta
+    "B0D45KJ86P",  # Prodotto in offerta
+    "B0D7MN4W7H",  # Prodotto in offerta
+    "B0DPQKWBZJ",  # Prodotto in offerta
+    "B0BPMHFNTJ",  # Prodotto in offerta
+    "B0FKBDT8FR",  # Prodotto in offerta
+    "B0DD43PYQ6",  # Prodotto in offerta
 ]
 
 # ============================================
