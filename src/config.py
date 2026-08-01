@@ -64,7 +64,7 @@ PREZZO_MINIMO = 3.0
 PREZZO_MASSIMO = 500.0
 SCONTO_MASSIMO_PLAUSIBILE = 80
 SCONTO_TOP_PERCENTUALE = 30
-print(f"   DEBUG: attuale={prezzo_attuale}, minimo={minimo_storico}, sconto={sconto}%")
+
 # ============================================
 # 5. COMPORTAMENTO DEL BOT
 # ============================================
