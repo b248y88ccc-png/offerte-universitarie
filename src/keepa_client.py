@@ -82,7 +82,7 @@ def verifica_con_keepa(asin):
     # Prezzo attuale
     prezzi = prodotto.get("prices", [])
     if not prezzi or prezzi[-1] <= 0:
-        print(f"   ❌ Prezzo non disponibile")
+        print(f"   ❌ Prezzo non disponibile per {asin}")
         return None
     prezzo_attuale = prezzi[-1] / 100
     print(f"   💰 Prezzo attuale: {prezzo_attuale}€")
