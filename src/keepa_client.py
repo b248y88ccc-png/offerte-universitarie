@@ -78,13 +78,35 @@ def verifica_con_keepa(asin):
         print(f"   ⚠️ Prodotto None per {asin}. Salto.")
         return None
     
+    # Controlla se il prodotto è valido (contiene dati)
+    if not isinstance(prodotto, dict):
+        print(f"   ⚠️ Prodotto non è un dizionario: {type(prodotto)}")
+        return None
+    
     print(f"   ✅ Prodotto trovato: {prodotto.get('title', 'Senza titolo')[:50]}...")
     
     # Prezzo attuale
-    prezzi = prodotto.get("prices", [])
-    if not prezzi or prezzi[-1] <= 0:
-        print(f"   ❌ Prezzo non disponibile per {asin}")
+    prezzi = prodotto.get("prices")
+    if not prezzi:
+        print(f"   ⚠️ Nessun array 'prices' per {asin}")
         return None
+    
+    if not isinstance(prezzi, list):
+        print(f"   ⚠️ 'prices' non è una lista: {type(prezzi)}")
+        return None
+    
+    if len(prezzi) == 0:
+        print(f"   ⚠️ Lista 'prices' vuota per {asin}")
+        return None
+    
+    if prezzi[-1] is None:
+        print(f"   ⚠️ Ultimo prezzo è None per {asin}")
+        return None
+    
+    if prezzi[-1] <= 0:
+        print(f"   ⚠️ Prezzo non valido (<=0) per {asin}")
+        return None
+    
     prezzo_attuale = prezzi[-1] / 100
     print(f"   💰 Prezzo attuale: {prezzo_attuale}€")
     
@@ -92,20 +114,20 @@ def verifica_con_keepa(asin):
     
     immagine = None
     immagini = prodotto.get("images", [])
-    if immagini:
+    if immagini and isinstance(immagini, list) and len(immagini) > 0:
         immagine = costruisci_url_immagine(immagini[0])
     
     # Minimo storico
     minimo_storico = None
     stats = prodotto.get("stats_parsed", {})
-    if stats:
-        if "min" in stats:
+    if stats and isinstance(stats, dict):
+        if "min" in stats and isinstance(stats["min"], dict):
             min_val = stats["min"].get("AMAZON")
             if min_val and min_val > 0:
                 minimo_storico = min_val / 100
                 print(f"   📉 Minimo storico (da stats): {minimo_storico}€")
-        if minimo_storico is None:
-            avg30 = stats.get("avg30", {}).get("AMAZON")
+        if minimo_storico is None and "avg30" in stats and isinstance(stats["avg30"], dict):
+            avg30 = stats["avg30"].get("AMAZON")
             if avg30 and avg30 > 0:
                 minimo_storico = avg30 / 100
                 print(f"   📊 Media 30gg (come riferimento): {minimo_storico}€")
@@ -113,12 +135,12 @@ def verifica_con_keepa(asin):
     if minimo_storico is None or minimo_storico <= 0:
         print(f"   🔍 Cerco nello storico...")
         storico = prodotto.get("history", [])
-        if storico:
+        if storico and isinstance(storico, list):
             prezzi_storici = []
             for entry in storico:
                 if isinstance(entry, list) and len(entry) >= 2:
                     p = entry[1]
-                    if p and p > 0:
+                    if p and isinstance(p, (int, float)) and p > 0:
                         prezzi_storici.append(p / 100)
             if prezzi_storici:
                 minimo_storico = min(prezzi_storici)
