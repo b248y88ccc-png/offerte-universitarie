@@ -2,7 +2,7 @@ name: Bot Offerte Universitarie
 
 on:
   schedule:
-    - cron: '0 9,14,20 * * *'
+    - cron: '0 */2 * * *'  # Ogni 2 ore
   workflow_dispatch:
 
 jobs:
