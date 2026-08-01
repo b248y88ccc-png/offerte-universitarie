@@ -1,5 +1,6 @@
 """
 Modulo che TROVA offerte su Amazon (scraping) e le VERIFICA con Keepa.
+VERSIONE SEMPLIFICATA E ROBUSTA.
 """
 
 import config
@@ -10,21 +11,22 @@ import re
 
 
 def _chiamata_keepa(endpoint, parametri):
+    """Effettua una chiamata all'API Keepa."""
     url = f"https://api.keepa.com/{endpoint}"
     parametri["key"] = config.KEEPA_API_KEY
     try:
         print(f"   📡 Chiamata Keepa: {endpoint} per {parametri.get('asin', '')}")
         risposta = requests.get(url, params=parametri, timeout=30)
         risposta.raise_for_status()
-        return risposta.json()
+        dati = risposta.json()
+        return dati
     except Exception as e:
         print(f"   ❌ Errore API Keepa: {e}")
-        if hasattr(e, 'response') and e.response:
-            print(f"      Risposta: {e.response.text[:200]}")
         return None
 
 
 def costruisci_url_immagine(codice_immagine):
+    """Trasforma il codice immagine Keepa in URL Amazon."""
     if not codice_immagine:
         return None
     if isinstance(codice_immagine, list):
@@ -46,78 +48,68 @@ def costruisci_url_immagine(codice_immagine):
 
 
 def verifica_con_keepa(asin):
-    print(f"   🔍 Inizio verifica per {asin}...")
+    """Verifica un singolo ASIN con Keepa."""
+    print(f"   🔍 Verifico: {asin}...")
     
+    # Salta codici che sembrano ISBN
     if re.match(r'^\d{10,13}$', str(asin)):
         print(f"   ⚠️ Saltato (sembra un ISBN)")
         return None
     
+    # Chiamata API
     parametri = {
         "asin": asin,
         "domain": config.KEEPA_DOMAIN_ID,
         "stats": "1",
-        "history": "1",
     }
     
     dati = _chiamata_keepa("product", parametri)
+    
+    # Controlli di sicurezza
     if not dati:
-        print(f"   ❌ Nessuna risposta da Keepa per {asin}")
+        print(f"   ❌ Nessuna risposta da Keepa")
         return None
     
     if "products" not in dati:
-        print(f"   ⚠️ Risposta senza 'products': {dati}")
+        print(f"   ⚠️ Risposta senza 'products'")
         return None
     
     if not dati["products"]:
-        print(f"   ⚠️ Lista prodotti vuota per {asin}")
+        print(f"   ⚠️ Nessun prodotto trovato per {asin}")
         return None
     
     prodotto = dati["products"][0]
     
+    # SE IL PRODOTTO È NONE, SALTA
     if prodotto is None:
-        print(f"   ⚠️ Prodotto None per {asin}. Salto.")
+        print(f"   ⚠️ Prodotto None per {asin}")
         return None
     
-    # Controlla se il prodotto è valido (contiene dati)
+    # SE IL PRODOTTO NON È UN DIZIONARIO, SALTA
     if not isinstance(prodotto, dict):
         print(f"   ⚠️ Prodotto non è un dizionario: {type(prodotto)}")
         return None
     
-    print(f"   ✅ Prodotto trovato: {prodotto.get('title', 'Senza titolo')[:50]}...")
-    
     # Prezzo attuale
     prezzi = prodotto.get("prices")
-    if not prezzi:
-        print(f"   ⚠️ Nessun array 'prices' per {asin}")
+    if not prezzi or not isinstance(prezzi, list) or len(prezzi) == 0:
+        print(f"   ❌ Prezzo non disponibile per {asin}")
         return None
     
-    if not isinstance(prezzi, list):
-        print(f"   ⚠️ 'prices' non è una lista: {type(prezzi)}")
-        return None
-    
-    if len(prezzi) == 0:
-        print(f"   ⚠️ Lista 'prices' vuota per {asin}")
-        return None
-    
-    if prezzi[-1] is None:
-        print(f"   ⚠️ Ultimo prezzo è None per {asin}")
-        return None
-    
-    if prezzi[-1] <= 0:
-        print(f"   ⚠️ Prezzo non valido (<=0) per {asin}")
+    if prezzi[-1] is None or prezzi[-1] <= 0:
+        print(f"   ❌ Prezzo non valido per {asin}")
         return None
     
     prezzo_attuale = prezzi[-1] / 100
-    print(f"   💰 Prezzo attuale: {prezzo_attuale}€")
-    
     titolo = prodotto.get("title", "Prodotto")
     
+    # Immagine
     immagine = None
     immagini = prodotto.get("images", [])
     if immagini and isinstance(immagini, list) and len(immagini) > 0:
         immagine = costruisci_url_immagine(immagini[0])
     
-    # Minimo storico
+    # Minimo storico (da stats)
     minimo_storico = None
     stats = prodotto.get("stats_parsed", {})
     if stats and isinstance(stats, dict):
@@ -125,30 +117,15 @@ def verifica_con_keepa(asin):
             min_val = stats["min"].get("AMAZON")
             if min_val and min_val > 0:
                 minimo_storico = min_val / 100
-                print(f"   📉 Minimo storico (da stats): {minimo_storico}€")
+        
         if minimo_storico is None and "avg30" in stats and isinstance(stats["avg30"], dict):
             avg30 = stats["avg30"].get("AMAZON")
             if avg30 and avg30 > 0:
                 minimo_storico = avg30 / 100
-                print(f"   📊 Media 30gg (come riferimento): {minimo_storico}€")
     
+    # Se non c'è minimo, usa fallback
     if minimo_storico is None or minimo_storico <= 0:
-        print(f"   🔍 Cerco nello storico...")
-        storico = prodotto.get("history", [])
-        if storico and isinstance(storico, list):
-            prezzi_storici = []
-            for entry in storico:
-                if isinstance(entry, list) and len(entry) >= 2:
-                    p = entry[1]
-                    if p and isinstance(p, (int, float)) and p > 0:
-                        prezzi_storici.append(p / 100)
-            if prezzi_storici:
-                minimo_storico = min(prezzi_storici)
-                print(f"   📉 Minimo storico (da history): {minimo_storico}€")
-    
-    if minimo_storico is None or minimo_storico <= 0:
-        minimo_storico = prezzo_attuale * 0.85
-        print(f"   ⚠️ Usato fallback: {minimo_storico}€")
+        minimo_storico = prezzo_attuale * 0.90  # Fallback: 10% di sconto ipotetico
     
     # Calcola sconto
     if prezzo_attuale >= minimo_storico:
@@ -156,11 +133,13 @@ def verifica_con_keepa(asin):
     else:
         sconto = round((1 - prezzo_attuale / minimo_storico) * 100)
     
-    print(f"   📊 Sconto calcolato: {sconto}% (soglia: {config.SCONTO_MINIMO_PERCENTUALE}%)")
+    print(f"   💰 Prezzo: {prezzo_attuale}€ | Minimo: {minimo_storico}€ | Sconto: {sconto}%")
     
+    # Filtra per sconto
     if sconto < config.SCONTO_MINIMO_PERCENTUALE:
         print(f"   ❌ Sconto {sconto}% < soglia {config.SCONTO_MINIMO_PERCENTUALE}%")
         return None
+    
     if sconto > config.SCONTO_MASSIMO_PLAUSIBILE:
         print(f"   ❌ Sconto {sconto}% > max {config.SCONTO_MASSIMO_PLAUSIBILE}%")
         return None
@@ -179,35 +158,40 @@ def verifica_con_keepa(asin):
 
 
 def trova_tutte_le_offerte():
+    """Funzione principale."""
     print("🚀 Avvio bot offerte universitarie...")
     
     if not config.KEEPA_API_KEY:
         print("❌ KEEPA_API_KEY non impostata!")
         return []
 
+    # Test connessione
     test = _chiamata_keepa("product", {"asin": "B07X3T1F9J", "domain": 8})
     if not test or "products" not in test:
         print("❌ Errore nella connessione a Keepa. Verifica la tua API key.")
         return []
     
     print("✅ Connessione a Keepa OK")
-    print("🔍 Cerco offerte su Amazon...")
     
-    # ASIN manuali
+    # Lista ASIN da verificare
     asins_da_verificare = []
+    
+    # 1. ASIN manuali da config
     if config.ASIN_MANUALI:
         print(f"   📋 Aggiungo {len(config.ASIN_MANUALI)} ASIN manuali...")
         asins_da_verificare.extend(config.ASIN_MANUALI)
     
-    # Scraping (solo se non abbiamo ASIN manuali)
-    if not asins_da_verificare:
+    # 2. Scraping Amazon (solo se abbiamo pochi ASIN manuali)
+    if len(asins_da_verificare) < 5:
+        print("🔍 Cerco offerte su Amazon...")
         termini = config.CATEGORIE["studente"]["termini_ricerca"]
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+        }
+        
         for termine in termini[:config.MAX_TERMINI_RICERCA]:
             url = f"https://www.amazon.it/s?k={termine}&rh=p_n_deal_type%3A2356605031&language=it"
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
-            }
             try:
                 print(f"   Cerco: {termine}...")
                 risposta = requests.get(url, headers=headers, timeout=15)
@@ -222,22 +206,21 @@ def trova_tutte_le_offerte():
             except Exception as e:
                 print(f"   ❌ Errore per {termine}: {e}")
     
+    # Rimuovi duplicati
     asins_da_verificare = list(set(asins_da_verificare))
-    print(f"   📊 Trovati {len(asins_da_verificare)} ASIN unici")
+    print(f"   📊 Totale ASIN da verificare: {len(asins_da_verificare)}")
+    
+    # Limita il numero
     asins_da_verificare = asins_da_verificare[:config.MAX_ASIN_PER_ESECUZIONE]
     
+    # Verifica ogni ASIN
     print("🔍 Verifico le offerte con Keepa...")
     offerte_valide = []
     for asin in asins_da_verificare:
-        print(f"   Verifico: {asin}...")
         offerta = verifica_con_keepa(asin)
         if offerta:
             offerte_valide.append(offerta)
-            titolo_corto = offerta['titolo'][:40] + "..." if len(offerta['titolo']) > 40 else offerta['titolo']
-            print(f"      ✅ {titolo_corto} - {offerta['sconto_percentuale']}%")
-        else:
-            print(f"      ❌ Nessuna offerta valida")
-        time.sleep(0.3)
+        time.sleep(0.2)  # Rispetta i limiti API
     
     print(f"🎯 Offerte valide: {len(offerte_valide)}")
     offerte_valide.sort(key=lambda o: o["sconto_percentuale"], reverse=True)
