@@ -1,0 +1,31 @@
+name: Pubblica offerte su Telegram
+
+on:
+  schedule:
+    # Gira ogni 2 ore (orario UTC: adatta se vuoi orari precisi in ora italiana)
+    - cron: "0 */2 * * *"
+  workflow_dispatch: {}  # permette anche di lanciarlo manualmente da GitHub
+
+jobs:
+  pubblica:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scarica il codice
+        uses: actions/checkout@v4
+
+      - name: Imposta Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installa le dipendenze
+        run: pip install -r requirements.txt
+
+      - name: Esegui lo script
+        env:
+          KEEPA_API_KEY: ${{ secrets.KEEPA_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          AMAZON_AFFILIATE_TAG: ${{ secrets.AMAZON_AFFILIATE_TAG }}
+        working-directory: ./src
+        run: python main.py
