@@ -79,19 +79,8 @@ MAX_TERMINI_RICERCA = 8
 # ============================================
 
 ASIN_MANUALI = [
-    "B07V5KK3PD",  # Norton Antivirus
-    "B0B4VXBMX6",  # Tastiera Dierya
-    "B0D8FR9DMR",  # Prodotto in offerta
-    "B0BZMLKXL4",  # Prodotto in offerta
-    "B0DGKDRXYZ",  # Prodotto in offerta
-    "B08J7G9S1F",  # Prodotto in offerta
-    "B0CQK8TZCF",  # Prodotto in offerta
-    "B0D45KJ86P",  # Prodotto in offerta
-    "B0D7MN4W7H",  # Prodotto in offerta
-    "B0DPQKWBZJ",  # Prodotto in offerta
-    "B0BPMHFNTJ",  # Prodotto in offerta
-    "B0FKBDT8FR",  # Prodotto in offerta
-    "B0DD43PYQ6",  # Prodotto in offerta
+     "B07X3T1F9J",  # Amazon Basics Cavo HDMI
+    "B08N5WRWNW",  # Prodotto di esempio
 ]
 
 # ============================================
