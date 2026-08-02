@@ -18,11 +18,10 @@ jobs:
         with:
           python-version: '3.10'
       
-      - name: Installa dipendenze
+      - name: Installa dipendenze (Velocissimo!)
         run: |
-          # Aggiunta la libreria requests che mancava!
-          pip install beautifulsoup4 Pillow matplotlib requests
-          
+          # Niente Playwright, niente Chromium! Solo le librerie API.
+          pip install requests
       
       - name: Esegui il bot
         run: |
