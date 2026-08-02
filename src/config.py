@@ -9,7 +9,7 @@ import os
 # 1. CREDENZIALI (da variabili d'ambiente)
 # ============================================
 
-KEEPA_API_KEY = os.environ.get("KEEPA_API_KEY")
+KEEPA_API_KEY = "m3t93ksddqntnpgibgijubm4s78u769rsrr9jah9p33m4aab4cinrot1170322ki"
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 AMAZON_AFFILIATE_TAG = os.environ.get("AMAZON_AFFILIATE_TAG", "IL_TUO_TAG-21")
