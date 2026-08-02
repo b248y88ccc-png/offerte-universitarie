@@ -1,123 +1,148 @@
 import os
 import time
-import re
 import requests
-from bs4 import BeautifulSoup
+import json
 from playwright.sync_api import sync_playwright
 
-# --- CONFIGURAZIONE (Legge le variabili da GitHub Secrets) ---
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-TELEGRAM_CHANNEL_ID = os.getenv('TELEGRAM_CHANNEL_ID')
+# --- CONFIGURAZIONE ---
+TELEGRAM_BOT_TOKEN = "8854356674:AAF65IdHYZE1S3xSfeP6cqGn9X3yrxZYH9E"
+TELEGRAM_CHANNEL_ID = "@offerteuniversitarie"
+KEEPA_API_KEY = "m3t93ksddqntnpgibgijubm4s78u769rsrr9jah9p33m4aab4cinrot1170322ki"
 
-# Lista prodotti da controllare (Sostituiscili con i tuoi ASIN)
+# I tuoi ASIN
 ASIN_LIST = [
     "B07X3T1F93",
     "B08N5WRWNW",
 ]
 
-def get_amazon_price_with_playwright(asin):
-    """Funzione che apre un vero browser per evitare il 503"""
+# --- 1. FUNZIONE PER OTTENERE IL PREZZO DA AMAZON ---
+def get_current_price(asin):
+    """Apre un browser per leggere il prezzo attuale su Amazon"""
     try:
         with sync_playwright() as p:
-            # Lancia il browser Chromium in modalità headless (invisibile)
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
             page = context.new_page()
-            
-            # Vai su Amazon
             url = f"https://www.amazon.it/dp/{asin}"
-            print(f"🔍 Apro browser per ASIN: {asin}")
+            print(f"🌐 Apro Amazon per {asin}...")
             page.goto(url, wait_until="domcontentloaded", timeout=15000)
-            
-            # Aspetta che il prezzo sia visibile (fino a 5 secondi)
-            try:
-                page.wait_for_selector(".a-price-whole, .a-offscreen", timeout=5000)
-            except:
-                pass # Se non trova il prezzo, va avanti lo stesso
             
             # Legge l'HTML
             html = page.content()
             browser.close()
             
-            # Analizza con BeautifulSoup
-            soup = BeautifulSoup(html, 'html.parser')
-            
-            # 1. Estrai il Titolo
-            title_elem = soup.select_one('#productTitle')
-            title = title_elem.get_text(strip=True) if title_elem else f"Prodotto ASIN {asin}"
-            
-            # 2. Estrai il Prezzo (Playwright carica il DOM completo, quindi funziona)
-            price_elem = soup.select_one('.a-price-whole') # Formato classico
-            if not price_elem:
-                price_elem = soup.select_one('.a-offscreen') # Formato alternativo
-            
-            if price_elem:
-                price_text = price_elem.get_text(strip=True).replace('.', '').replace(',', '.')
-                # Prende solo i numeri
-                price_match = re.search(r'(\d+(?:\.\d+)?)', price_text)
+            # Cerca il prezzo nel DOM
+            # Se il prezzo è nascosto, cerca 'a-offscreen', altrimenti 'a-price-whole'
+            if 'a-price-whole' in html:
+                import re
+                # Estrae il prezzo usando una regex flessibile
+                price_match = re.search(r'<span class="a-price-whole">([\d\.]+)', html)
                 if price_match:
-                    price = float(price_match.group(1))
-                    print(f"💰 Prezzo trovato: € {price}")
-                    return price, title
+                    price = float(price_match.group(1).replace('.', ''))
+                    return price
             
-            print(f"⚠️ Prezzo non rilevato per {asin}")
-            return None, title
+            # Prova a prendere il prezzo da un altro selettore tipico di Amazon
+            price_match_off = re.search(r'<span class="a-offscreen">[€\s]*([\d\.]+)', html)
+            if price_match_off:
+                 price = float(price_match_off.group(1).replace('.', ''))
+                 return price
+
+            print(f"⚠️ Prezzo Amazon non trovato per {asin}")
+            return None
 
     except Exception as e:
-        print(f"❌ Errore grave con Playwright per {asin}: {e}")
-        return None, None
+        print(f"❌ Errore Playwright per {asin}: {e}")
+        return None
 
-def send_telegram_alert(asin, title, price):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID:
-        print("❌ Token Telegram mancanti!")
-        return
+# --- 2. FUNZIONE PER OTTENERE IL PREZZO MINIMO STORICO DA KEEPA ---
+def get_keepa_historical_price(asin):
+    """Chiama l'API di Keepa per avere il prezzo più basso mai registrato"""
+    if not KEEPA_API_KEY:
+        print("❌ CHIAVE KEEPA NON TROVATA! Controlla i Secrets.")
+        return None
 
-    link = f"https://www.amazon.it/dp/{asin}"
-    image_url = f"https://images-eu.ssl-images-amazon.com/images/I/41{asin}.jpg" # Placeholder immagine
-    
+    url = "https://api.keepa.com/product"
+    params = {
+        'key': KEEPA_API_KEY,
+        'asin': asin,
+        'domain': 10, # 10 è il codice per Amazon Italia
+        'stats': 3600 # 3600 ti restituisce il prezzo minimo storico
+    }
+
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            if data['products']:
+                # Keepa restituisce il prezzo minimo storico in una lista
+                # La struttura è complicata, ma prendiamo il minimo dalla risposta
+                price_data = data['products'][0]['stats']
+                if price_data:
+                    # 'min' è il prezzo minimo in centesimi
+                    min_price_cents = price_data['min']
+                    min_price = min_price_cents / 100.0
+                    print(f"📉 Prezzo minimo storico Keepa: € {min_price}")
+                    return min_price
+        else:
+            print(f"❌ Errore API Keepa: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        print(f"❌ Errore connessione Keepa: {e}")
+        return None
+
+# --- 3. FUNZIONE PER INVIARE SU TELEGRAM ---
+def send_telegram_alert(asin, title, current_price, min_price):
     caption = f"🛒 *{title[:50]}...*\n\n" \
-              f"💰 Prezzo attuale: *€ {price:.2f}*\n" \
-              f"(Sconto rilevato!)\n\n" \
-              f"🛍️ [Acquista su Amazon]({link})"
+              f"💰 Prezzo Attuale: *€ {current_price:.2f}*\n" \
+              f"📉 Prezzo Minimo Storico: € {min_price:.2f}\n" \
+              f"🚨 *SCONTO ERRATO!* 🚨\n\n" \
+              f"🛍️ [Acquista subito](https://www.amazon.it/dp/{asin})"
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         'chat_id': TELEGRAM_CHANNEL_ID,
-        'photo': image_url,
-        'caption': caption,
+        'text': caption,
         'parse_mode': 'Markdown'
     }
     
     try:
         response = requests.post(url, data=payload)
         if response.status_code == 200:
-            print("✅ Inviato su Telegram!")
+            print("✅ Allarme inviato su Telegram!")
         else:
             print(f"❌ Errore Telegram: {response.text}")
     except Exception as e:
         print(f"❌ Errore connessione Telegram: {e}")
 
+# --- MAIN ---
 def main():
-    print("🚀 Avvio bot...")
-    
-    # Per avere un risultato "Sconti Errati", dobbiamo avere un prezzo storico.
-    # Dato che non hai un database, controlliamo se il prezzo è molto basso rispetto alla media.
-    soglia_sconto = 50.0 # Se il prezzo è sotto i 50€, lo mandiamo (esempio fittizio)
+    print("🚀 Avvio bot con Keepa...")
     
     for asin in ASIN_LIST:
-        price, title = get_amazon_price_with_playwright(asin)
+        # Passo 1: Leggi il prezzo attuale da Amazon
+        current_price = get_current_price(asin)
         
-        if price:
-            # LOGICA SCONTO: Se prezzo è inferiore alla soglia
-            if price < soglia_sconto: 
-                print(f"🚨 SCONTO TROVATO! {asin} a € {price}")
-                send_telegram_alert(asin, title, price)
+        if current_price:
+            print(f"💰 Prezzo Attuale Amazon: € {current_price}")
+            
+            # Passo 2: Chiedi a Keepa il prezzo minimo storico
+            min_price = get_keepa_historical_price(asin)
+            
+            if min_price:
+                # Passo 3: FAI LA COMPARAZIONE!
+                # Se il prezzo attuale è INFERIORE al minimo storico, è un errore!
+                if current_price < min_price:
+                    print(f"🚨 SCONTO ERRATO TROVATO! {asin} sotto il minimo storico!")
+                    send_telegram_alert(asin, asin, current_price, min_price) # Title placeholder
+                else:
+                    print(f"ℹ️ Prezzo normale per {asin} (Sopra la media storica).")
             else:
-                print(f"ℹ️ Prezzo normale per {asin} (€ {price})")
+                print(f"⏭️ Impossibile ottenere storico da Keepa per {asin}, salto.")
+        else:
+            print(f"⏭️ Prezzo attuale non trovato per {asin}, salto.")
         
-        # Aspetta 5 secondi prima di fare il prossimo prodotto, per non sovraccaricare Amazon
         time.sleep(5)
 
 if __name__ == "__main__":
