@@ -18,9 +18,8 @@ jobs:
         with:
           python-version: '3.10'
       
-      - name: Installa dipendenze (Velocissimo!)
+      - name: Installa dipendenze
         run: |
-          # Niente Playwright, niente Chromium! Solo le librerie API.
           pip install requests
       
       - name: Esegui il bot
