@@ -21,8 +21,8 @@ jobs:
       - name: Installa dipendenze
         run: |
           # Aggiunta la libreria requests che mancava!
-          pip install playwright beautifulsoup4 Pillow matplotlib requests
-          playwright install chromium
+          pip install beautifulsoup4 Pillow matplotlib requests
+          
       
       - name: Esegui il bot
         run: |
