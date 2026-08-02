@@ -15,51 +15,62 @@ ASIN_LIST = [
     "B08N5WRWNW",
 ]
 
-# --- 1. FUNZIONE PER OTTENERE IL PREZZO DA AMAZON ---
-def get_current_price(asin):
-    """Apre un browser per leggere il prezzo attuale su Amazon"""
+# --- 1. FUNZIONE CHE LEGGE IL PREZZO ATTUALE DIRETTAMENTE DA KEEPA (NO SCRAPING) ---
+def get_keepa_current_price(asin):
+    """
+    Usa l'API di Keepa per leggere il prezzo attuale del prodotto.
+    Keepa ha una chiamata specifica per i dati in tempo reale.
+    """
+    if not KEEPA_API_KEY:
+        print("❌ CHIAVE KEEPA NON TROVATA! Controlla i Secrets.")
+        return None
+
+    # Parametri per la richiesta Product all'API di Keepa
+    # domain=10 è per Amazon Italia
+    url = "https://api.keepa.com/product"
+    params = {
+        'key': KEEPA_API_KEY,
+        'asin': asin,
+        'domain': 10,
+        'stats': 1 # 1 significa "dammi i dati della pagina appena aggiornati"
+    }
+
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            page = context.new_page()
-            url = f"https://www.amazon.it/dp/{asin}"
-            print(f"🌐 Apro Amazon per {asin}...")
-            page.goto(url, wait_until="domcontentloaded", timeout=15000)
-            
-            # Legge l'HTML
-            html = page.content()
-            browser.close()
-            
-            # --- HO SPOSTATO L'IMPORT DI 're' QUI DENTRO ---
-            import re 
-
-            # Cerca il prezzo nel DOM
-            price_match = re.search(r'<span class="a-price-whole">([\d\.]+)', html)
-            if price_match:
-                price = float(price_match.group(1).replace('.', ''))
-                return price
-            
-            # Prova a prendere il prezzo da un altro selettore
-            price_match_off = re.search(r'<span class="a-offscreen">[€\s]*([\d\.]+)', html)
-            if price_match_off:
-                 price = float(price_match_off.group(1).replace('.', ''))
-                 return price
-
-            print(f"⚠️ Prezzo Amazon non trovato per {asin}")
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            if data['products']:
+                # Il prezzo attuale è dentro 'data' (che sono le variazioni di prezzo giornaliere)
+                # La struttura di Keepa prevede che l'ultimo valore della lista sia quello attuale
+                product_data = data['products'][0]['data']
+                
+                # Keepa restituisce i prezzi nei suoi array. L'ultimo elemento è il prezzo attuale.
+                # In molti casi è l'ultimo valore della lista (es. se è una lista di prezzi nel tempo)
+                # Il formato di Keepa: [timestamp, prezzo_in_centesimi]
+                if product_data and len(product_data) > 0:
+                    # In alcuni casi Keepa restituisce una lista di liste.
+                    # Se la lista è piatta, proviamo a prendere l'ultimo valore
+                    if isinstance(product_data[0], list):
+                        last_price_cents = product_data[-1][1]
+                    else:
+                        # Se la struttura è diversa, l'ultimo numero è il prezzo attuale
+                        last_price_cents = product_data[-1]
+                    
+                    current_price = last_price_cents / 100.0
+                    print(f"💰 Prezzo Attuale (Keepa): € {current_price}")
+                    return current_price
+            print(f"⚠️ Prezzo attuale non trovato su Keepa per {asin}")
             return None
-
+        else:
+            print(f"❌ Errore API Keepa (Get Price): {response.status_code}")
+            return None
     except Exception as e:
-        print(f"❌ Errore Playwright per {asin}: {e}")
+        print(f"❌ Errore connessione Keepa: {e}")
         return None
 
 # --- 2. FUNZIONE PER OTTENERE IL PREZZO MINIMO STORICO DA KEEPA ---
 def get_keepa_historical_price(asin):
-    """Chiama l'API di Keepa"""
     if not KEEPA_API_KEY:
-        print("❌ CHIAVE KEEPA NON TROVATA! Controlla i Secrets.")
         return None
 
     url = "https://api.keepa.com/product"
@@ -67,7 +78,7 @@ def get_keepa_historical_price(asin):
         'key': KEEPA_API_KEY,
         'asin': asin,
         'domain': 10,
-        'stats': 3600
+        'stats': 3600 # 3600 chiede il minimo storico
     }
 
     try:
@@ -82,7 +93,7 @@ def get_keepa_historical_price(asin):
                     print(f"📉 Prezzo minimo storico Keepa: € {min_price}")
                     return min_price
         else:
-            print(f"❌ Errore API Keepa: {response.status_code}")
+            print(f"❌ Errore API Keepa (Get History): {response.status_code}")
             return None
     except Exception as e:
         print(f"❌ Errore connessione Keepa: {e}")
@@ -116,18 +127,21 @@ def send_telegram_alert(asin, title, current_price, min_price):
 
 # --- MAIN ---
 def main():
-    print("🚀 Avvio bot con Keepa...")
+    print("🚀 Avvio bot con Keepa API (Zero Scraping!)...")
     
     for asin in ASIN_LIST:
-        current_price = get_current_price(asin)
+        # Passo 1: Leggi il prezzo attuale direttamente da Keepa
+        current_price = get_keepa_current_price(asin)
         
         if current_price:
-            print(f"💰 Prezzo Attuale Amazon: € {current_price}")
+            # Passo 2: Leggi il minimo storico da Keepa
             min_price = get_keepa_historical_price(asin)
             
             if min_price:
+                # Passo 3: Confronta
                 if current_price < min_price:
                     print(f"🚨 SCONTO ERRATO TROVATO! {asin} sotto il minimo storico!")
+                    # Invia a Telegram (title lo mettiamo come ASIN per ora, funziona lo stesso)
                     send_telegram_alert(asin, asin, current_price, min_price)
                 else:
                     print(f"ℹ️ Prezzo normale per {asin} (Sopra la media storica).")
@@ -136,7 +150,7 @@ def main():
         else:
             print(f"⏭️ Prezzo attuale non trovato per {asin}, salto.")
         
-        time.sleep(5)
+        time.sleep(2)
 
 if __name__ == "__main__":
     main()
