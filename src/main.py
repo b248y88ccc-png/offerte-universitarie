@@ -15,24 +15,20 @@ ASIN_LIST = [
     "B08N5WRWNW",
 ]
 
-# --- 1. FUNZIONE CHE LEGGE IL PREZZO ATTUALE DIRETTAMENTE DA KEEPA (NO SCRAPING) ---
-def get_keepa_current_price(asin):
-    """
-    Usa l'API di Keepa per leggere il prezzo attuale del prodotto.
-    Keepa ha una chiamata specifica per i dati in tempo reale.
-    """
+# --- 1. FUNZIONE PER OTTENERE PREZZO ATTUALE E TITOLO ---
+def get_keepa_product_data(asin):
+    """Chiama Keepa per avere prezzo attuale, titolo e storico"""
     if not KEEPA_API_KEY:
         print("❌ CHIAVE KEEPA NON TROVATA! Controlla i Secrets.")
-        return None
+        return None, None, None
 
-    # Parametri per la richiesta Product all'API di Keepa
-    # domain=10 è per Amazon Italia
     url = "https://api.keepa.com/product"
     params = {
         'key': KEEPA_API_KEY,
         'asin': asin,
-        'domain': 10,
-        'stats': 1 # 1 significa "dammi i dati della pagina appena aggiornati"
+        'domain': 10,         # Amazon Italia
+        'stats': 3600,        # Per il prezzo minimo storico
+        'update': 1           # Forza l'aggiornamento del prezzo attuale
     }
 
     try:
@@ -40,73 +36,53 @@ def get_keepa_current_price(asin):
         if response.status_code == 200:
             data = response.json()
             if data['products']:
-                # Il prezzo attuale è dentro 'data' (che sono le variazioni di prezzo giornaliere)
-                # La struttura di Keepa prevede che l'ultimo valore della lista sia quello attuale
-                product_data = data['products'][0]['data']
+                product = data['products'][0]
                 
-                # Keepa restituisce i prezzi nei suoi array. L'ultimo elemento è il prezzo attuale.
-                # In molti casi è l'ultimo valore della lista (es. se è una lista di prezzi nel tempo)
-                # Il formato di Keepa: [timestamp, prezzo_in_centesimi]
-                if product_data and len(product_data) > 0:
-                    # In alcuni casi Keepa restituisce una lista di liste.
-                    # Se la lista è piatta, proviamo a prendere l'ultimo valore
-                    if isinstance(product_data[0], list):
-                        last_price_cents = product_data[-1][1]
+                # 1. Estrai il Titolo
+                title = product.get('title', f"Prodotto {asin}")
+                
+                # 2. Estrai il Prezzo Attuale
+                # Keepa salva i prezzi in una lista di liste: [timestamp, prezzo_in_centesimi]
+                price_data = product.get('data', [])
+                current_price = None
+                
+                if price_data and len(price_data) > 0:
+                    # Prende l'ultimo valore della lista (quello attuale)
+                    if isinstance(price_data[0], list):
+                        last_price_cents = price_data[-1][1]
                     else:
-                        # Se la struttura è diversa, l'ultimo numero è il prezzo attuale
-                        last_price_cents = product_data[-1]
+                        last_price_cents = price_data[-1]
                     
                     current_price = last_price_cents / 100.0
-                    print(f"💰 Prezzo Attuale (Keepa): € {current_price}")
-                    return current_price
-            print(f"⚠️ Prezzo attuale non trovato su Keepa per {asin}")
-            return None
+                    print(f"💰 {title} -> Prezzo Attuale: € {current_price}")
+                
+                # 3. Estrai il Prezzo Minimo Storico
+                min_price = None
+                if 'stats' in product and product['stats']:
+                    min_price_cents = product['stats'].get('min')
+                    if min_price_cents:
+                        min_price = min_price_cents / 100.0
+                        print(f"📉 {title} -> Prezzo Minimo Storico: € {min_price}")
+
+                return current_price, min_price, title
+            else:
+                print(f"⚠️ Prodotto {asin} non trovato su Keepa.")
+                return None, None, None
         else:
-            print(f"❌ Errore API Keepa (Get Price): {response.status_code}")
-            return None
+            print(f"❌ Errore API Keepa: {response.status_code}")
+            return None, None, None
     except Exception as e:
         print(f"❌ Errore connessione Keepa: {e}")
-        return None
+        return None, None, None
 
-# --- 2. FUNZIONE PER OTTENERE IL PREZZO MINIMO STORICO DA KEEPA ---
-def get_keepa_historical_price(asin):
-    if not KEEPA_API_KEY:
-        return None
-
-    url = "https://api.keepa.com/product"
-    params = {
-        'key': KEEPA_API_KEY,
-        'asin': asin,
-        'domain': 10,
-        'stats': 3600 # 3600 chiede il minimo storico
-    }
-
-    try:
-        response = requests.get(url, params=params)
-        if response.status_code == 200:
-            data = response.json()
-            if data['products']:
-                price_data = data['products'][0]['stats']
-                if price_data:
-                    min_price_cents = price_data['min']
-                    min_price = min_price_cents / 100.0
-                    print(f"📉 Prezzo minimo storico Keepa: € {min_price}")
-                    return min_price
-        else:
-            print(f"❌ Errore API Keepa (Get History): {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"❌ Errore connessione Keepa: {e}")
-        return None
-
-# --- 3. FUNZIONE PER INVIARE SU TELEGRAM ---
+# --- 2. FUNZIONE PER INVIARE SU TELEGRAM ---
 def send_telegram_alert(asin, title, current_price, min_price):
     link = f"https://www.amazon.it/dp/{asin}?tag={AMAZON_AFFILIATE_TAG}"
     
-    caption = f"🛒 *{title[:50]}...*\n\n" \
+    caption = f"🛒 *{title}*\n\n" \
               f"💰 Prezzo Attuale: *€ {current_price:.2f}*\n" \
               f"📉 Prezzo Minimo Storico: € {min_price:.2f}\n" \
-              f"🚨 *SCONTO ERRATO!* 🚨\n\n" \
+              f"🚨 *SCONTO ERRATO TROVATO!* 🚨\n\n" \
               f"🛍️ [Acquista subito]({link})"
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -119,7 +95,7 @@ def send_telegram_alert(asin, title, current_price, min_price):
     try:
         response = requests.post(url, data=payload)
         if response.status_code == 200:
-            print("✅ Allarme inviato su Telegram!")
+            print("✅ Allarme inviato su Telegram con successo!")
         else:
             print(f"❌ Errore Telegram: {response.text}")
     except Exception as e:
@@ -127,29 +103,23 @@ def send_telegram_alert(asin, title, current_price, min_price):
 
 # --- MAIN ---
 def main():
-    print("🚀 Avvio bot con Keepa API (Zero Scraping!)...")
+    print("🚀 Avvio bot con Keepa API (Zero Scraping, Zero Errori!)...")
     
     for asin in ASIN_LIST:
-        # Passo 1: Leggi il prezzo attuale direttamente da Keepa
-        current_price = get_keepa_current_price(asin)
+        # Passo Unico: Chiedi tutto a Keepa (prezzo attuale, storico e titolo)
+        current_price, min_price, title = get_keepa_product_data(asin)
         
-        if current_price:
-            # Passo 2: Leggi il minimo storico da Keepa
-            min_price = get_keepa_historical_price(asin)
-            
-            if min_price:
-                # Passo 3: Confronta
-                if current_price < min_price:
-                    print(f"🚨 SCONTO ERRATO TROVATO! {asin} sotto il minimo storico!")
-                    # Invia a Telegram (title lo mettiamo come ASIN per ora, funziona lo stesso)
-                    send_telegram_alert(asin, asin, current_price, min_price)
-                else:
-                    print(f"ℹ️ Prezzo normale per {asin} (Sopra la media storica).")
+        if current_price and min_price:
+            # Logica dello sconto: se il prezzo attuale è più basso del minimo storico
+            if current_price < min_price:
+                print(f"🚨 SCONTO ERRATO TROVATO! {asin} sotto il minimo storico!")
+                send_telegram_alert(asin, title, current_price, min_price)
             else:
-                print(f"⏭️ Impossibile ottenere storico da Keepa per {asin}, salto.")
+                print(f"ℹ️ Prezzo normale per {title}. (Attuale €{current_price} > Storico €{min_price})")
         else:
-            print(f"⏭️ Prezzo attuale non trovato per {asin}, salto.")
+            print(f"⏭️ Dati insufficienti da Keepa per {asin}, salto.")
         
+        # Pausa breve tra un prodotto e l'altro per non sovraccaricare le API
         time.sleep(2)
 
 if __name__ == "__main__":
