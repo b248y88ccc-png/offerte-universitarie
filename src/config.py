@@ -10,9 +10,9 @@ import os
 # ============================================
 
 KEEPA_API_KEY = "m3t93ksddqntnpgibgijubm4s78u769rsrr9jah9p33m4aab4cinrot1170322ki"
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
-AMAZON_AFFILIATE_TAG = os.environ.get("AMAZON_AFFILIATE_TAG", "IL_TUO_TAG-21")
+TELEGRAM_BOT_TOKEN = "8854356674:AAF65IdHYZE1S3xSfeP6cqGn9X3yrxZYH9E"
+TELEGRAM_CHANNEL_ID = "@offerteuniversitarie"
+AMAZON_AFFILIATE_TAG = "offerteuni06-21"
 
 # ============================================
 # 2. DOMINI
