@@ -1,8 +1,7 @@
 import os
 import time
 import requests
-import json
-from playwright.sync_api import sync_playwright
+
 
 # --- CONFIGURAZIONE ---
 TELEGRAM_BOT_TOKEN = "8854356674:AAF65IdHYZE1S3xSfeP6cqGn9X3yrxZYH9E"
