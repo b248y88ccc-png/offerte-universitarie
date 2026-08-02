@@ -33,15 +33,12 @@ def get_current_price(asin):
             html = page.content()
             browser.close()
             
-            # Cerca il prezzo nel DOM
-            # Se il prezzo è nascosto, cerca 'a-offscreen', altrimenti 'a-price-whole'
-            if 'a-price-whole' in html:
-                import re
-                # Estrae il prezzo usando una regex flessibile
-                price_match = re.search(r'<span class="a-price-whole">([\d\.]+)', html)
-                if price_match:
-                    price = float(price_match.group(1).replace('.', ''))
-                    return price
+            # Cerca il prezzo nel DOM usando 're' (ora importato correttamente)
+            # Estrae il prezzo usando una regex flessibile
+            price_match = re.search(r'<span class="a-price-whole">([\d\.]+)', html)
+            if price_match:
+                price = float(price_match.group(1).replace('.', ''))
+                return price
             
             # Prova a prendere il prezzo da un altro selettore tipico di Amazon
             price_match_off = re.search(r'<span class="a-offscreen">[€\s]*([\d\.]+)', html)
@@ -77,10 +74,8 @@ def get_keepa_historical_price(asin):
             data = response.json()
             if data['products']:
                 # Keepa restituisce il prezzo minimo storico in una lista
-                # La struttura è complicata, ma prendiamo il minimo dalla risposta
                 price_data = data['products'][0]['stats']
                 if price_data:
-                    # 'min' è il prezzo minimo in centesimi
                     min_price_cents = price_data['min']
                     min_price = min_price_cents / 100.0
                     print(f"📉 Prezzo minimo storico Keepa: € {min_price}")
@@ -94,11 +89,13 @@ def get_keepa_historical_price(asin):
 
 # --- 3. FUNZIONE PER INVIARE SU TELEGRAM ---
 def send_telegram_alert(asin, title, current_price, min_price):
+    link = f"https://www.amazon.it/dp/{asin}?tag={AMAZON_AFFILIATE_TAG}"
+    
     caption = f"🛒 *{title[:50]}...*\n\n" \
               f"💰 Prezzo Attuale: *€ {current_price:.2f}*\n" \
               f"📉 Prezzo Minimo Storico: € {min_price:.2f}\n" \
               f"🚨 *SCONTO ERRATO!* 🚨\n\n" \
-              f"🛍️ [Acquista subito](https://www.amazon.it/dp/{asin})"
+              f"🛍️ [Acquista subito]({link})"
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -135,7 +132,7 @@ def main():
                 # Se il prezzo attuale è INFERIORE al minimo storico, è un errore!
                 if current_price < min_price:
                     print(f"🚨 SCONTO ERRATO TROVATO! {asin} sotto il minimo storico!")
-                    send_telegram_alert(asin, asin, current_price, min_price) # Title placeholder
+                    send_telegram_alert(asin, asin, current_price, min_price)
                 else:
                     print(f"ℹ️ Prezzo normale per {asin} (Sopra la media storica).")
             else:
@@ -147,3 +144,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+        
