@@ -33,14 +33,16 @@ def get_current_price(asin):
             html = page.content()
             browser.close()
             
-            # Cerca il prezzo nel DOM usando 're' (ora importato correttamente)
-            # Estrae il prezzo usando una regex flessibile
+            # --- HO SPOSTATO L'IMPORT DI 're' QUI DENTRO ---
+            import re 
+
+            # Cerca il prezzo nel DOM
             price_match = re.search(r'<span class="a-price-whole">([\d\.]+)', html)
             if price_match:
                 price = float(price_match.group(1).replace('.', ''))
                 return price
             
-            # Prova a prendere il prezzo da un altro selettore tipico di Amazon
+            # Prova a prendere il prezzo da un altro selettore
             price_match_off = re.search(r'<span class="a-offscreen">[€\s]*([\d\.]+)', html)
             if price_match_off:
                  price = float(price_match_off.group(1).replace('.', ''))
@@ -55,7 +57,7 @@ def get_current_price(asin):
 
 # --- 2. FUNZIONE PER OTTENERE IL PREZZO MINIMO STORICO DA KEEPA ---
 def get_keepa_historical_price(asin):
-    """Chiama l'API di Keepa per avere il prezzo più basso mai registrato"""
+    """Chiama l'API di Keepa"""
     if not KEEPA_API_KEY:
         print("❌ CHIAVE KEEPA NON TROVATA! Controlla i Secrets.")
         return None
@@ -64,8 +66,8 @@ def get_keepa_historical_price(asin):
     params = {
         'key': KEEPA_API_KEY,
         'asin': asin,
-        'domain': 10, # 10 è il codice per Amazon Italia
-        'stats': 3600 # 3600 ti restituisce il prezzo minimo storico
+        'domain': 10,
+        'stats': 3600
     }
 
     try:
@@ -73,7 +75,6 @@ def get_keepa_historical_price(asin):
         if response.status_code == 200:
             data = response.json()
             if data['products']:
-                # Keepa restituisce il prezzo minimo storico in una lista
                 price_data = data['products'][0]['stats']
                 if price_data:
                     min_price_cents = price_data['min']
@@ -81,7 +82,7 @@ def get_keepa_historical_price(asin):
                     print(f"📉 Prezzo minimo storico Keepa: € {min_price}")
                     return min_price
         else:
-            print(f"❌ Errore API Keepa: {response.status_code} - {response.text}")
+            print(f"❌ Errore API Keepa: {response.status_code}")
             return None
     except Exception as e:
         print(f"❌ Errore connessione Keepa: {e}")
@@ -118,18 +119,13 @@ def main():
     print("🚀 Avvio bot con Keepa...")
     
     for asin in ASIN_LIST:
-        # Passo 1: Leggi il prezzo attuale da Amazon
         current_price = get_current_price(asin)
         
         if current_price:
             print(f"💰 Prezzo Attuale Amazon: € {current_price}")
-            
-            # Passo 2: Chiedi a Keepa il prezzo minimo storico
             min_price = get_keepa_historical_price(asin)
             
             if min_price:
-                # Passo 3: FAI LA COMPARAZIONE!
-                # Se il prezzo attuale è INFERIORE al minimo storico, è un errore!
                 if current_price < min_price:
                     print(f"🚨 SCONTO ERRATO TROVATO! {asin} sotto il minimo storico!")
                     send_telegram_alert(asin, asin, current_price, min_price)
@@ -144,4 +140,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
