@@ -2,7 +2,7 @@ name: Bot Offerte Universitarie
 
 on:
   schedule:
-    - cron: '0 */2 * * *'  # Ogni 2 ore
+    - cron: '0 */2 * * *'  # Ogni 2 ore (si può aumentare, ma Amazon ti blocca se fai troppo)
   workflow_dispatch:
 
 jobs:
@@ -20,7 +20,9 @@ jobs:
       
       - name: Installa dipendenze
         run: |
-          pip install requests beautifulsoup4 Pillow matplotlib
+          # Installiamo Playwright e le altre librerie
+          pip install playwright beautifulsoup4 Pillow matplotlib
+          playwright install chromium
       
       - name: Esegui il bot
         run: |
